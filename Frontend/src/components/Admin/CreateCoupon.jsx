@@ -1,0 +1,227 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import toast, { Toaster } from "react-hot-toast";
+import { useNavigate } from "react-router";
+import { useSelector } from "react-redux";
+
+const ApiUrl = import.meta.env.VITE_BACKEND_URL;
+
+const CreateCoupon = () => {
+  const user = useSelector((state) => state.auth?.userData);
+  const role = user?.role;
+
+  const navigate = useNavigate();
+
+  const [formData, setFormData] = useState({
+    couponCode: "",
+    discount: "",
+    itemType: "",
+    itemId: "",
+  });
+
+  const [items, setItems] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // ✅ Protect Route Properly
+  useEffect(() => {
+    if (role && role !== "admin") {
+      navigate("/admin/dashboard");
+    }
+  }, [role, navigate]);
+
+  // ✅ Fetch Items Based on Item Type
+  useEffect(() => {
+    if (!formData.itemType) return;
+
+    const fetchItems = async () => {
+      try {
+        let endpoint = "";
+
+        if (formData.itemType === "Course") {
+          endpoint = `${ApiUrl}/courses/get-all-courses`;
+        } else if (formData.itemType === "MockTestBundle") {
+          endpoint = `${ApiUrl}/admin/mock-test-bundles`;
+        }
+
+        const res = await axios.get(endpoint, { withCredentials: true });
+
+        if (formData.itemType === "Course" && res.data.courses) {
+          setItems(res.data.courses);
+        }
+
+        if (formData.itemType === "MockTestBundle" && res.data.data) {
+          setItems(res.data.data);
+        }
+      } catch (err) {
+        console.error("Error fetching items:", err);
+        toast.error("Failed to load items");
+      }
+    };
+
+    fetchItems();
+  }, [formData.itemType]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    // Reset itemId if itemType changes
+    if (name === "itemType") {
+      setFormData({
+        ...formData,
+        itemType: value,
+        itemId: "",
+      });
+      setItems([]);
+      return;
+    }
+
+    setFormData({ ...formData, [name]: value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!formData.itemType || !formData.itemId) {
+      toast.error("Please select item type and item");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const { data } = await axios.post(
+        `${ApiUrl}/admin/create-coupon`,
+        formData,
+        { withCredentials: true },
+      );
+
+      if (data.success) {
+        toast.success("Coupon created successfully!");
+
+        setFormData({
+          couponCode: "",
+          discount: "",
+          itemType: "",
+          itemId: "",
+        });
+
+        setItems([]);
+
+        setTimeout(() => {
+          navigate("/admin/coupons");
+        }, 1500);
+      } else {
+        toast.error(data.message || "Failed to create coupon");
+      }
+    } catch (err) {
+      console.error("Error creating coupon:", err);
+      toast.error("Failed to create coupon");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="max-w-xl mx-auto bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 shadow-lg rounded-xl px-4 md:px-6 py-6 my-8">
+      <Toaster position="top-right" />
+
+      <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">
+        Create Coupon
+      </h2>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Coupon Code */}
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+            Coupon Code
+          </label>
+          <input
+            type="text"
+            name="couponCode"
+            value={formData.couponCode}
+            onChange={handleChange}
+            placeholder="e.g. SAVE20"
+            className="w-full border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+
+        {/* Discount */}
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+            Discount (%)
+          </label>
+          <input
+            type="number"
+            name="discount"
+            value={formData.discount}
+            onChange={handleChange}
+            min="1"
+            max="100"
+            placeholder="Enter discount percentage"
+            className="w-full border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+
+        {/* Item Type */}
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+            Select Item Type
+          </label>
+          <select
+            name="itemType"
+            value={formData.itemType}
+            onChange={handleChange}
+            className="w-full border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            required
+          >
+            <option value="">-- Select Item Type --</option>
+            <option value="Course">Course</option>
+            <option value="MockTestBundle">Mock Test Bundle</option>
+          </select>
+        </div>
+
+        {/* Item Dropdown */}
+        {formData.itemType && (
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+              Select{" "}
+              {formData.itemType === "Course" ? "Course" : "Mock Test Bundle"}
+            </label>
+            <select
+              name="itemId"
+              value={formData.itemId}
+              onChange={handleChange}
+              className="w-full border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              required
+            >
+              <option value="">-- Select Item --</option>
+
+              {items.map((item) => (
+                <option key={item._id} value={item._id}>
+                  {item.courseTitle || item.cardTitle || item.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Submit */}
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className={`w-full flex justify-center items-center gap-2 cursor-pointer disabled:cursor-not-allowed ${
+            isSubmitting
+              ? "bg-blue-400 cursor-not-allowed"
+              : "bg-blue-500 hover:bg-blue-600 dark:bg-blue-500 dark:hover:bg-blue-600"
+          } text-white font-medium py-2 rounded-lg transition-colors`}
+        >
+          {isSubmitting ? "Submitting..." : "Create Coupon"}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default CreateCoupon;

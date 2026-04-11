@@ -1,0 +1,431 @@
+import { useEffect, useState } from "react";
+import axios from "axios";
+import { loadRazorpayScript } from "../utils/razorpay";
+import { useSelector, useDispatch } from "react-redux";
+import { toast, ToastContainer } from "react-toastify";
+import { useParams, useNavigate } from "react-router";
+import { login } from "../features/auth/authSlice";
+import { addBundles } from "../features/enrolledMockTestBundles/enrolledMockTestBundlesSlice";
+import { ArrowLeft, Lock } from "lucide-react"
+
+const ApiUrl = import.meta.env.VITE_BACKEND_URL;
+
+const CheckOut = () => {
+  const { id, itemType } = useParams();
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const isLoggedIn = useSelector((state) => state.auth.status);
+  const userData = useSelector((state) => state.auth.userData);
+  const theme = useSelector((state) => state.theme.theme);
+
+  const [item, setItem] = useState(null);
+  const [mobileNumber, setMobileNumber] = useState("");
+  const [instituteName, setInstituteName] = useState("");
+  const [presentCourseOfStudy, setPresentCourseOfStudy] = useState("");
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedDiscount, setAppliedDiscount] = useState(0);
+  const [finalAmount, setFinalAmount] = useState(null);
+  const [showCoupon, setShowCoupon] = useState(false);
+  const [showPaymentHelp, setShowPaymentHelp] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState(0);
+
+   useEffect(() => {
+    const handleContextMenu = (event) => {
+      event.preventDefault();
+    };
+
+    document.addEventListener("contextmenu", handleContextMenu);
+
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!id || !itemType) return;
+
+    const fetchItem = async () => {
+      try {
+        setLoading(true);
+        let url = "";
+
+        if (itemType === "course") {
+          url = `${ApiUrl}/courses/${id}`;
+        } else if (itemType === "mock-test-bundle") {
+          url = `${ApiUrl}/user/mock-test-bundles/${id}`;
+        }
+
+        const res =
+          itemType === "course"
+            ? await axios.get(url, { withCredentials: true })
+            : await axios.get(url);
+
+        const data =
+          itemType === "course"
+            ? res.data?.course
+            : res.data?.data;
+
+        setItem(data);
+        setFinalAmount(data?.discountedPrice || 0);
+        setDiscountAmount(data?.discountedPrice || 0)
+        
+      } catch (err) {
+        toast.error("Failed to load details");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchItem();
+  }, [itemType, id]);
+
+  const isEnrolled = userData?.enrolledCourses.includes(item?._id);
+
+    const handleApplyCoupon = async () => {
+    if (!couponCode) {
+      toast.warn("Enter a coupon code first");
+      return;
+    }
+
+    try {
+      const res = await axios.post(
+        `${ApiUrl}/orders/validate-coupon-code`,
+        {
+          itemId: item._id,
+          itemType: itemType === "course" ? "Course" : "MockTestBundle",
+          couponCode
+        },
+
+        { withCredentials: true },
+      );
+
+      if (res.data.success) {
+        setAppliedDiscount(res.data.discount);
+        const discountAmt = Math.floor(
+          (item.discountedPrice * res.data.discount) / 100,
+        );
+        const newPrice = item.discountedPrice - discountAmt;
+        setFinalAmount(newPrice);
+        toast.success(`Coupon applied! You got ${res.data.discount}% off 🎉`);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to apply coupon");
+      setAppliedDiscount(0);
+      setFinalAmount(item.discountedPrice);
+    }
+  };
+    const handlePayment = async () => {
+    if (isEnrolled) {
+      navigate(`/my-courses/${courseDetails?._id}`);
+      return;
+    }
+    if (!isLoggedIn) {
+      toast.warn("Please login to enroll");
+      return;
+    }
+    if (!mobileNumber || mobileNumber.length !== 10) {
+      toast.warn("Enter a valid phone number");
+      return;
+    }
+    // --
+    if (!instituteName || instituteName.length < 2) {
+      toast.warn("Enter a valid institute name");
+      return;
+    }
+
+    if (!presentCourseOfStudy || presentCourseOfStudy.length < 3) {
+      toast.warn("Enter a valid course name");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await axios.post(
+        `${ApiUrl}/orders/create-order`,
+        {
+          itemId: item?._id,
+          itemType: itemType === "course" ? "course" : "mock_test_bundle",
+          amount: finalAmount,
+          mobileNumber,
+          instituteName,
+          presentCourseOfStudy,
+        },
+        { withCredentials: true },
+      );
+
+      const isScriptLoaded = await loadRazorpayScript();
+      if (!isScriptLoaded) {
+        alert("Razorpay SDK failed to load. Please try again later.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: 100 * finalAmount,
+        currency: "INR",
+        name: "Microdome Classes",
+        description: `Payment for ${title}`,
+        image:
+          "https://res.cloudinary.com/dpsmiqy61/image/upload/v1755101381/1755101380750-MicroDome%20new%20logo.png",
+        order_id: res.data.order.id,
+        handler: async function (response) {
+          try {
+            const res = await axios.get(`${ApiUrl}/users/current-user`, {
+              withCredentials: true,
+            });
+            dispatch(login(res.data.data));
+            if(itemType === "mock-test-bundle"){
+                const enrolledMockTestBundles = await axios.get(`${ApiUrl}/users/enrolled-mock-test-bundles`, {
+                  withCredentials: true
+                });
+            dispatch(addBundles(enrolledMockTestBundles.data?.bundles))
+           }
+            navigate("/payment-success", {
+              state: { paymentId: response.razorpay_payment_id, itemType: itemType === "course" ? "course" : "mock test series" },
+            });
+          } catch (err) {
+            console.log("Failed to refresh user:", err.message);
+          } finally {
+            setIsSubmitting(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            toast.info("Payment cancelled by user");
+            setIsSubmitting(false);
+          },
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
+    } catch (err) {
+      console.log(err);
+      setIsSubmitting(false);
+    }
+  };
+
+  const title = item?.courseTitle || item?.title;
+  const image = item?.courseImage || item?.thumbnail;
+  const actualPrice = item?.actualPrice;
+  const price = finalAmount;
+  const description = item?.subTitle || item?.description;
+
+  return (
+    <div className={`min-h-screen ${theme} bg-gradient-to-br from-gray-100 to-gray-200 dark:from-black dark:to-gray-900`}>
+      <ToastContainer />
+      <div className="max-w-6xl mx-auto pt-8 px-4">
+        <button onClick={() => navigate(-1)}
+          className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium mb-6 cursor-pointer px-3 py-1 rounded-2xl hover:bg-gray-200 dark:hover:bg-gray-900 transition-colors duration-300"
+        >
+          <ArrowLeft size={20} />
+          Back
+        </button>
+      </div>
+      <div className="max-w-6xl mx-auto py-4 px-4">
+        {loading ? (
+          <div className="text-center text-lg font-semibold text-gray-500 dark:text-gray-400">
+            Loading checkout details...
+          </div>
+        ) : item ? (
+          <div className="grid lg:grid-cols-3 gap-10">
+
+            {/* LEFT SECTION */}
+            <div className="lg:col-span-2 bg-white/70 dark:bg-[#1b1e27]/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 transition-all duration-500">
+
+              <h1 className="text-3xl font-extrabold mb-6 text-gray-900 dark:text-white">
+                Checkout
+              </h1>
+
+              {/* User Info */}
+              <div className="space-y-6">
+                <InputField
+                  label="Whatsapp Number"
+                  value={mobileNumber}
+                  onChange={setMobileNumber}
+                  placeholder="Enter your whatsapp number"
+                />
+
+                <InputField
+                  label="Institute Name"
+                  value={instituteName}
+                  onChange={setInstituteName}
+                  placeholder="Enter your institute name"
+                />
+
+                <InputField
+                  label="Present Course of Study"
+                  value={presentCourseOfStudy}
+                  onChange={setPresentCourseOfStudy}
+                  placeholder="Enter your course of study"
+                />
+              </div>
+
+              {/* Coupon Section */}
+              <div className="mt-8">
+                <div
+                  onClick={() => setShowCoupon(!showCoupon)}
+                  className="cursor-pointer text-blue-600 font-semibold flex items-center justify-between"
+                >
+                  Have a coupon code?
+                  <span>{showCoupon ? "▲" : "▼"}</span>
+                </div>
+
+                {showCoupon && (
+                  <div className="mt-4 flex gap-3">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) =>
+                        setCouponCode(e.target.value.toUpperCase())
+                      }
+                      placeholder="Enter coupon"
+                      className="        w-full px-4 py-3 rounded-lg
+                                        bg-white/80 dark:bg-white/5
+                                        backdrop-blur-xl
+                                        border border-slate-300 dark:border-white/10
+                                        text-slate-800 dark:text-white
+                                        placeholder:text-slate-400 dark:placeholder:text-slate-500
+                                        shadow-sm dark:shadow-lg
+                                        focus:outline-none
+                                        focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400
+                                        focus:border-blue-500 dark:focus:border-blue-400
+                                        transition-all duration-300
+                                        hover:shadow-md dark:hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]"
+                    />
+                    <button
+                      onClick={handleApplyCoupon}
+                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all cursor-pointer"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Payment Button */}
+              <button
+                onClick={handlePayment}
+                disabled={isSubmitting}
+                className={`mt-10 w-full py-3 rounded-2xl text-lg font-bold shadow-xl transition-all cursor-pointer duration-300 ${
+                  isSubmitting
+                    ? "bg-gray-400"
+                    : "bg-gradient-to-r from-green-500 to-green-600 hover:scale-105 hover:shadow-2xl text-white"
+                }`}
+              >
+                {isSubmitting
+                  ? "Processing..."
+                  : isEnrolled
+                  ? "Go to My Course"
+                  : "Proceed to Payment"}
+              </button>
+            </div>
+
+            {/* RIGHT SECTION - ORDER SUMMARY */}
+            <div className="sticky top-24 h-fit bg-white/80 dark:bg-[#1b1e27]/80 backdrop-blur-xl rounded-3xl shadow-2xl p-6">
+
+              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">
+                Order Summary
+              </h2>
+
+              <img
+                src={image}
+                alt={title}
+                className="rounded-2xl mb-6 w-full object-cover shadow-md"
+              />
+
+              <h3 className="text-xl font-semibold text-gray-800 dark:text-white">
+                {title}
+              </h3>
+
+              <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
+                {description}
+              </p>
+
+              <div className="space-y-3 border-t border-black/50 dark:border-white/50 pt-4">
+                <PriceRow label="Original Price" value={`₹${actualPrice}`} />
+                <PriceRow label="Discount" value={`- ₹${actualPrice-discountAmount}`}/>
+                {appliedDiscount > 0 && (
+                  <PriceRow
+                    label={`Coupon Applied (${appliedDiscount}%)`}
+                    value={`- ₹${Math.floor(
+                      (item.discountedPrice * appliedDiscount) / 100
+                    )}`}
+                    highlight
+                  />
+                )}
+                <div className="flex justify-between font-bold text-lg pt-4 border-t text-black dark:text-white border-black/50 dark:border-white/50 px-1">
+                  <span>Total</span>
+                  <span>₹{price}</span>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center gap-1 text-xs text-gray-400">
+                Secure payment powered by Razorpay 
+                <Lock className="h-3 w-3" />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center text-red-600 font-semibold">
+            Item not found
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const InputField = ({ label, value, onChange, placeholder }) => (
+  <div className="space-y-2">
+    <label className="block text-sm font-semibold 
+      text-slate-700 dark:text-slate-300 tracking-wide">
+      {label}
+    </label>
+
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="
+        w-full px-4 py-3 rounded-lg
+        bg-white/80 dark:bg-white/5
+        backdrop-blur-xl
+        border border-slate-300 dark:border-white/10
+        text-slate-800 dark:text-white
+        placeholder:text-slate-400 dark:placeholder:text-slate-500
+        shadow-sm dark:shadow-lg
+        focus:outline-none
+        focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400
+        focus:border-blue-500 dark:focus:border-blue-400
+        transition-all duration-300
+        hover:shadow-md dark:hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]
+      "
+    />
+  </div>
+);
+
+
+const PriceRow = ({ label, value, highlight }) => (
+  <div
+    className={`
+      flex justify-between items-center mt-1 px-3 rounded-lg
+      transition-all duration-300
+      ${
+        highlight
+          ? "text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-500/10 py-1.5"
+          : "text-slate-600 dark:text-slate-300"
+      }
+    `}
+  >
+    <span className="text-sm">{label}</span>
+    <span className="text-sm font-medium">{value}</span>
+  </div>
+);
+
+
+export default CheckOut;

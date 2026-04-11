@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-heading: "Rubik", system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+  }
+}
+
+
+@keyframes loading-bar {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-loading-bar {
+  width: 50%;
+  animation: loading-bar 1.5s infinite ease-in-out;
+}
+
+@theme {
+  --color-highlighted: #3eb5a2;
+  --color-highlighted-hover: #2F8779;
+
+  --color-accent: oklch(26.9% 0 0);
+  --color-accent-foreground: oklch(98.5% 0 0);
+
+  --color-light-pink: #f4cccc;
+  --color-mint-green: #a8e6cf;
+  --color-warm-salmon: #ea9999;
+  --color-light-lilac: #e0bbe4;
+  --color-baby-blue: #bfefff;
+}
+
+@utility scrollbar {
+  &::-webkit-scrollbar {
+    width: 0.6rem;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 50px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 50px;
+    border: 1.5px solid var(--scrollbar-track);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.gradiant-text {
+  background: linear-gradient(to left, #db3b7e, #3eb5a2);
+  background-clip: text;
+  color: transparent;
+}
+
+.highlighted-text {
+  color: #3eb5a2;
+}
+
+:root {
+  --gap: 32px;
+  --scrollbar-track: #e5e7eb; /* gray-200 */
+  --scrollbar-thumb: #3b82f6; /* blue-500 */
+  --scrollbar-thumb-hover: #2563eb; /* blue-600 */
+}
+
+.dark {
+  --scrollbar-track: #1f2937; /* gray-800 */
+  --scrollbar-thumb: #60a5fa; /* blue-400 */
+  --scrollbar-thumb-hover: #3b82f6; /* blue-500 */
+}
+
+#marquee {
+  mask-image: linear-gradient(to right, transparent, #000 10% 90%, transparent);
+}
+
+.testimonial-container {
+  animation: scroll 60s linear infinite;
+}
+
+#marquee:hover .testimonial-container {
+  animation-play-state: paused;
+}
+
+@keyframes scroll {
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+  }
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+input[type="number"] {
+  appearance: textfield;
+}
+
+/* nav{
+  bg-[rgba(244,242,242,0.85)] dark:bg-[rgba(8,_8,_8,_0.2)] border-b border-gray-950/[.1] dark:border-gray-50/[.1]
+
+  dark:bg-[#232B38]
+  text-[#2C7A7B]
+} */
+
+/* Hide scrollbar for Chrome, Safari and Edge */
+body::-webkit-scrollbar {
+  width: 0px;
+  background: transparent; /* optional: just in case */
+}
+
+/* Hide scrollbar for Firefox */
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none; /* for IE and Edge */
+}
+
+/* Also hide scrollbar on html */
+html::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+html {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}

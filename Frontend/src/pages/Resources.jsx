@@ -1,0 +1,123 @@
+import React, { useEffect } from "react";
+import { ResourceTopic } from "../components";
+
+import OperonPart1 from "../assets/pdfs/OperonPart1.pdf";
+import OperonPart2 from "../assets/pdfs/OperonPart2.pdf";
+import OperonPart3 from "../assets/pdfs/OperonPart3.pdf";
+import MolBioNumericals from "../assets/pdfs/MolBioNumericals.pdf";
+
+import AOS from "aos";
+import "aos/dist/aos.css";
+
+import { Helmet } from "react-helmet-async";
+
+const resources = [
+  {
+    id: 1,
+    topic: "Operon",
+    videos: [
+      {
+        id: 1,
+        title: "YouTube video 1",
+        url: "https://www.youtube.com/embed/1s1O-uGcgtc",
+      },
+      {
+        id: 2,
+        title: "YouTube video 2",
+        url: "https://www.youtube.com/embed/pSkYAE1zzVU",
+      },
+      {
+        id: 3,
+        title: "YouTube video 3",
+        url: "https://www.youtube.com/embed/GHSRvvUd38A",
+      },
+      {
+        id: 4,
+        title: "YouTube video 4",
+        url: "https://www.youtube.com/embed/IhYvk-pPDcw",
+      },
+    ],
+    notes: [
+      {
+        title: "Operon Part 1",
+        file: OperonPart1,
+      },
+      {
+        title: "Operon Part 2",
+        file: OperonPart2,
+      },
+      {
+        title: "Operon Part 3",
+        file: OperonPart3,
+      },
+      {
+        title: "Numerical Discussions and Solving",
+        file: MolBioNumericals,
+      },
+    ],
+  },
+];
+
+const Resources = () => {
+  useEffect(() => {
+    AOS.init({ duration: 1000, once: true });
+  }, []);
+
+  return (
+    <>
+      <Helmet>
+        <title>Resources | Microdome Classes</title>
+        <meta
+          name="description"
+          content="Explore our resources for Molecular Biology, including videos and notes on Operon and related topics."
+        />
+        <meta
+          name="keywords"
+          content="Microdome, Resources, Molecular Biology, Operon, Videos, Notes"
+        />
+        <meta name="author" content="Microdome" />
+        <meta property="og:title" content="Resources | Microdome Classes" />
+        <meta
+          property="og:description"
+          content="Access our resources for Molecular Biology, featuring videos and comprehensive notes on Operon and more."
+        />
+        <meta property="og:type" content="website" />
+        <meta
+          property="og:url"
+          content="https://microdomeclasses.in/resources"
+        />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Resources | Microdome Classes" />
+        <meta
+          name="twitter:description"
+          content="Explore our resources for Molecular Biology, including videos and notes on Operon and related topics."
+        />
+      </Helmet>
+      <div className="w-full flex items-center justify-center transition-colors duration-300">
+        <div className="my-24 md:my-32 w-full max-w-6xl px-4">
+          <h2
+            className="text-3xl md:text-4xl font-bold text-center"
+            data-aos="fade-down"
+          >
+            Molecular <span className="text-highlighted">Biology</span>
+          </h2>
+          {resources.map((resource, index) => (
+            <div
+              key={resource.id}
+              data-aos="fade-up"
+              data-aos-delay={index * 100}
+            >
+              <ResourceTopic
+                topic={resource.topic}
+                videos={resource.videos}
+                notes={resource.notes}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default Resources;

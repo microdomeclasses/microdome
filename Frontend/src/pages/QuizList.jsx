@@ -1,0 +1,405 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { useNavigate } from "react-router";
+import { loadRazorpayScript } from "../utils/razorpay.js";
+import { motion } from "framer-motion";
+import { Clock, Lock } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
+import { useDispatch, useSelector } from "react-redux";
+import { login } from "../features/auth/authSlice";
+import { Helmet } from "react-helmet-async";
+import Microdome from "../assets/microdome.jpg";
+
+const ApiUrl = import.meta.env.VITE_BACKEND_URL;
+
+const QuizList = () => {
+  const [quizzes, setQuizzes] = useState([]);
+  const [actualPrice, setActualPrice] = useState(399);
+  const [discountedPrice, setDiscountedPrice] = useState(99);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const dispatch = useDispatch();
+  const isLoggedIn = useSelector((state) => state.auth.status);
+  const userData = useSelector((state) => state.auth.userData);
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchQuizzes = async () => {
+      try {
+        setLoading(true);
+        const res = await axios.get(`${ApiUrl}/quiz`);
+        setQuizzes(res.data.data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchQuizzes();
+  }, []);
+
+  useEffect(() => {
+    const fetchQuizPrice = async () => {
+      try {
+        const res = await axios.get(`${ApiUrl}/quiz/bundle/price`);
+        setActualPrice(res.data.quizPrice.actualPrice);
+        setDiscountedPrice(res.data.quizPrice.discountedPrice);
+      } catch (error) {
+        console.log(error);
+      }
+    };
+    fetchQuizPrice();
+  }, []);
+
+  const hasAccessToQuizzes = userData?.hasAccessToQuizzes || false;
+  const attemptedQuizzes = userData?.attemptedQuizzes || [];
+
+  const handleUnlock = () => {
+    if (!isLoggedIn) {
+      toast.error("Please login to continue!");
+      return;
+    }
+    setIsModalOpen(true);
+  };
+
+  const handlePayment = async () => {
+    if (!isLoggedIn) {
+      toast.error("Please login to continue!");
+      return;
+    }
+
+    if (hasAccessToQuizzes) {
+      toast.error("You have already purchased mock test series");
+      return;
+    }
+
+    setIsPaying(true);
+
+    try {
+      const res = await axios.post(
+        `${ApiUrl}/orders/create-order`,
+        {
+          amount: discountedPrice,
+          itemType: "quiz",
+        },
+        { withCredentials: true },
+      );
+
+      const isScriptLoaded = await loadRazorpayScript();
+      if (!isScriptLoaded) {
+        toast.error("Razorpay SDK failed to load. Please try again later.");
+        return;
+      }
+
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: discountedPrice * 100,
+        currency: "INR",
+        name: "Microdome Classes",
+        description: "Payment for Mock Test Series",
+        image:
+          "https://res.cloudinary.com/dpsmiqy61/image/upload/v1755101381/1755101380750-MicroDome%20new%20logo.png",
+        order_id: res.data.order.id,
+
+        handler: async function (response) {
+          try {
+            const res = await axios.get(`${ApiUrl}/users/current-user`, {
+              withCredentials: true,
+            });
+            dispatch(login(res.data.data));
+            navigate("/payment-success", {
+              state: { paymentId: response.razorpay_payment_id },
+            });
+          } catch (err) {
+            console.log("Failed to refresh user:", err.message);
+          }
+        },
+
+        modal: {
+          ondismiss: function () {
+            toast.error("Payment cancelled by user");
+          },
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
+    } catch (err) {
+      console.error("Payment Error:", err);
+      toast.error("Something went wrong. Try again!");
+    } finally {
+      setIsModalOpen(false);
+      setIsPaying(false);
+    }
+  };
+
+  // Helper for button text & click
+  const getButtonConfig = (quiz) => {
+    const isAttempted = attemptedQuizzes.includes(quiz._id);
+
+    if (quiz.category === "free") {
+      if (!isLoggedIn) {
+        return {
+          text: "Attempt",
+          onClick: () => toast.error("Login to attempt"),
+        };
+      }
+      return isAttempted
+        ? {
+            text: "Go to Result",
+            onClick: () => navigate(`/quiz/leaderboard/${quiz._id}`),
+          }
+        : {
+            text: "Attempt",
+            onClick: () => navigate(`/quiz/${quiz._id}`),
+          };
+    } else {
+      // premium quiz
+      if (!hasAccessToQuizzes) {
+        return {
+          text: "Unlock Premium Test",
+          locked: true,
+          onClick: handleUnlock,
+        };
+      }
+      return isAttempted
+        ? {
+            text: "Go to Result",
+            onClick: () => navigate(`/quiz/leaderboard/${quiz._id}`),
+          }
+        : {
+            text: "Attempt",
+            onClick: () => navigate(`/quiz/${quiz._id}`),
+          };
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="w-full min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 py-32 flex items-center justify-center">
+        <span className="text-lg text-gray-600 dark:text-gray-400">
+          Loading...
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Helmet>
+        <title>Quizzes | Microdome Classes</title>
+
+        <meta
+          name="description"
+          content="Practice biology with topic-wise quizzes for IIT-JAM, CUET-PG and GAT-B preparation. Test your knowledge in Cell Biology, Molecular Biology, Bioinformatics and more."
+        />
+
+        <meta
+          name="keywords"
+          content="Biology Quiz, IIT JAM Biology Quiz, CUET PG Biology Quiz, GAT-B Practice Questions, Biology MCQ Practice, Microdome Quizzes, Topic Wise Biology Quiz"
+        />
+
+        <meta name="author" content="Microdome Classes" />
+
+        <meta
+          property="og:title"
+          content="Quizzes | Microdome Classes"
+        />
+
+        <meta
+          property="og:description"
+          content="Attempt topic-wise biology quizzes designed for IIT-JAM, CUET-PG and GAT-B preparation. Strengthen your concepts and test your knowledge."
+        />
+
+        <meta property="og:type" content="website" />
+
+        <meta property="og:url" content="https://microdomeclasses.in/quizzes" />
+
+        <meta property="og:image" content={Microdome} />
+
+        <meta name="twitter:card" content="summary_large_image" />
+
+        <meta
+          name="twitter:title"
+          content="Quizzes | Microdome Classes"
+        />
+
+        <meta
+          name="twitter:description"
+          content="Practice biology concepts with topic-wise quizzes for IIT-JAM, CUET-PG and GAT-B preparation."
+        />
+
+        <meta name="twitter:image" content={Microdome} />
+
+        <link rel="canonical" href="https://microdomeclasses.in/quizzes" />
+
+        <link rel="icon" href="/microdomeLogo.png" />
+      </Helmet>
+
+
+      <div className="w-full min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 py-32">
+        <Toaster />
+        <div className="w-full max-w-6xl mx-auto px-4">
+          <div className="max-w-2xl px-2 mx-auto text-center mb-12">
+            <h1 className="text-3xl md:text-4xl font-bold">
+              Practice {" "}
+              <span className="text-highlighted">Quizzes</span>
+            </h1>
+
+            <p className="mt-4 text-gray-600 dark:text-gray-400">
+              Strengthen your biology concepts with topic-wise quizzes designed
+              for IIT-JAM, CUET-PG and GAT-B preparation.
+            </p>
+          </div>
+
+          {quizzes.length === 0 ? (
+            <p className="text-center text-gray-600 dark:text-gray-400 text-lg">
+              No quizzes found.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-6">
+              {quizzes.map((quiz, index) => {
+                const config = getButtonConfig(quiz);
+
+                return (
+                  <motion.div
+                    key={quiz._id}
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="bg-white dark:bg-zinc-900 shadow-md hover:shadow-2xl rounded-2xl p-6 flex flex-col justify-between transition-all duration-300 border border-gray-200 dark:border-zinc-800"
+                  >
+                    <div>
+                      <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                        {quiz.title}
+                      </h2>
+                      <p className="text-gray-600 dark:text-gray-400 mt-2 line-clamp-3">
+                        {quiz.description}
+                      </p>
+                      {/* {quiz.timeLimit > 0 && (
+                      <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mt-3">
+                        <Clock size={16} className="mr-2" />
+                        Time Limit: {quiz.timeLimit} min
+                      </div>
+                    )} */}
+                    </div>
+
+                    {/* ✅ Button Logic */}
+                    {config.locked ? (
+                      <div
+                        onClick={config.onClick}
+                        className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-2 
+                              bg-gray-200 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 
+                              font-medium rounded-xl border border-gray-300 dark:border-zinc-700 
+                              cursor-pointer hover:bg-gray-300 dark:hover:bg-zinc-700 transition"
+                      >
+                        <Lock size={18} />
+                        {config.text}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={config.onClick}
+                        className="mt-6 w-full px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 
+                                text-white font-medium rounded-xl shadow-md hover:scale-105 
+                                hover:shadow-lg transition-transform duration-200 cursor-pointer"
+                      >
+                        {config.text}
+                      </button>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ✅ Modal */}
+        {isModalOpen && (
+          <div className="fixed inset-0 bg-gray-200 dark:bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div
+              className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg p-6 w-[90%] max-w-[480px]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-2xl font-bold text-center mb-3">
+                Unlock Premium Quizzes
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400 text-center mb-6">
+                Get access to our{" "}
+                <span className="font-semibold">Quiz Series </span>
+                and challenge yourself with carefully curated quizzes designed
+                to strengthen your concepts and boost your preparation.
+              </p>
+
+              {/* Pricing Section */}
+              {(() => {
+                const discountPercent = Math.round(
+                  ((actualPrice - discountedPrice) / actualPrice) * 100,
+                );
+
+                return (
+                  <div className="flex items-center justify-between gap-3 mb-6 px-2">
+                    <div className="flex items-center gap-3">
+                      <p className="text-gray-500 line-through text-lg">
+                        ₹ {actualPrice}
+                      </p>
+                      <p className="text-3xl font-bold text-green-600">
+                        ₹ {discountedPrice}
+                      </p>
+                    </div>
+                    <span className="bg-green-100 dark:bg-slate-100 text-green-600 dark:text-black text-sm font-semibold px-2 py-1 rounded-md">
+                      {discountPercent}% OFF
+                    </span>
+                  </div>
+                );
+              })()}
+
+              <div className="mb-6">
+                <p className=" text-yellow-700 dark:text-yellow-800 font-semibold">
+                  ⚠️ Trouble in payment ?
+                </p>
+                <ul className="mt-2 text-sm text-yellow-600 dark:text-yellow-700 list-disc list-inside space-y-1">
+                  <li>
+                    Make sure to allow <b>third-party cookies</b> in your
+                    browser settings.
+                  </li>
+                  <li>
+                    Recommended Browser: <b>Google Chrome</b>
+                  </li>
+                  <li>
+                    Contact: <b>team@microdomeclasses.in</b>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex justify-between gap-3">
+                <button
+                  className="flex-1 py-2 rounded-lg bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700 transition cursor-pointer"
+                  onClick={() => setIsModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={isPaying}
+                  className={`flex-1 py-2 rounded-lg text-white transition cursor-pointer ${
+                    isPaying
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-indigo-600 hover:bg-indigo-700"
+                  }`}
+                  onClick={handlePayment}
+                >
+                  {isPaying ? "Processing..." : "Enroll Now"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
+
+export default QuizList;

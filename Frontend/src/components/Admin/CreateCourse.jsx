@@ -109,7 +109,7 @@ const CreateCourse = () => {
         }
       });
 
-      await axios.post(`${ApiUrl}/admin/create-course`, data, {
+      await axios.post(`${ApiUrl}/courses/create-course`, data, {
         withCredentials: true,
       });
 

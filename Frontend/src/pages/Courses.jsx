@@ -72,7 +72,7 @@ const Courses = () => {
       key: u,
       label: toHuman(u),
     })),
-    { key: "special", label: "Special Courses" },
+    { key: "special", label: "Crash Courses" },
   ];
 
   /* ================= FILTER ================= */
@@ -212,7 +212,7 @@ const Courses = () => {
                   {/* SPECIAL */}
                   {grouped.special.length > 0 && (
                     <Section
-                      title="Special Courses"
+                      title="Crash Courses"
                       subTitle="Explore our special courses designed to give you an edge in your studies."
                     >
                       {grouped.special.map((course) => (

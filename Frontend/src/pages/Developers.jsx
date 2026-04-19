@@ -11,7 +11,7 @@ const founders = [
     name: "Rohit Gupta",
     role: "Full Stack Developer",
     img: RohitPic,
-    email: "rg954792@gmail.com",
+    email: "imrohitgupta2001@gmail.com",
     linkedin: "https://www.linkedin.com/in/rohit-gupta-a6a53222a/",
     website: "https://portfolio-website-seven-ebon-92.vercel.app/", 
     instagram: "https://www.instagram.com/rohit_gupta_0810/",
